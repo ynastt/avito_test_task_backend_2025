@@ -115,7 +115,7 @@ func (s *UserService) deactivateUser(ctx context.Context, userID string) (*domai
 func (s *UserService) handleReviewerReplacement(
 	ctx context.Context,
 	prID string,
-	oldUserID string,
+	OldReviewerID string,
 	teamName string,
 ) error {
 	pr, err := s.prRepo.GetPullRequestByID(ctx, prID)
@@ -130,9 +130,9 @@ func (s *UserService) handleReviewerReplacement(
 	if err != nil {
 		s.lg.Warn("failed to get replacement candidates, removing reviewer",
 			slog.String("pr_id", prID),
-			slog.String("user_id", oldUserID),
+			slog.String("user_id", OldReviewerID),
 			slog.Any("error", err))
-		return s.removeReviewer(ctx, oldUserID, prID)
+		return s.removeReviewer(ctx, OldReviewerID, prID)
 	}
 
 	if len(candidates) > 0 {
@@ -140,11 +140,11 @@ func (s *UserService) handleReviewerReplacement(
 		if err != nil {
 			s.lg.Warn("failed to select reviewer, removing",
 				slog.String("pr_id", prID),
-				slog.String("user_id", oldUserID))
-			return s.removeReviewer(ctx, oldUserID, prID)
+				slog.String("user_id", OldReviewerID))
+			return s.removeReviewer(ctx, OldReviewerID, prID)
 		}
 
-		if err := s.prRepo.RemoveReviewer(ctx, oldUserID, prID); err != nil {
+		if err := s.prRepo.RemoveReviewer(ctx, OldReviewerID, prID); err != nil {
 			return fmt.Errorf("failed to remove old reviewer: %w", err)
 		}
 
@@ -154,15 +154,15 @@ func (s *UserService) handleReviewerReplacement(
 
 		s.lg.Info("reviewer reassigned during deactivation",
 			slog.String("pr_id", prID),
-			slog.String("old_user_id", oldUserID),
+			slog.String("old_user_id", OldReviewerID),
 			slog.String("new_user_id", newReviewer.UserID))
 		return nil
 	}
 
 	s.lg.Info("no replacement candidates found, removing reviewer",
 		slog.String("pr_id", prID),
-		slog.String("user_id", oldUserID))
-	return s.removeReviewer(ctx, oldUserID, prID)
+		slog.String("user_id", OldReviewerID))
+	return s.removeReviewer(ctx, OldReviewerID, prID)
 }
 
 func (s *UserService) removeReviewer(ctx context.Context, userID, prID string) error {

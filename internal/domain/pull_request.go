@@ -40,8 +40,8 @@ type MergePRRequest struct {
 }
 
 type ReassignRequest struct {
-	ID        string `json:"pull_request_id"`
-	OldUserID string `json:"old_user_id"`
+	ID            string `json:"pull_request_id"`
+	OldReviewerID string `json:"old_reviewer_id"`
 }
 
 type ReassignResponse struct {

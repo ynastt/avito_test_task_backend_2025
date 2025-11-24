@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: avito_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: avito_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - avito_network
+
+  app:
+    build: .
+    container_name: avito_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SERVER_HOST: localhost
+      SERVER_PORT: 8080
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: postgres
+      DB_NAME: avito_service
+      DB_SSL: disable
+    ports:
+      - "8080:8080"
+    networks:
+      - avito_network
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+
+networks:
+  avito_network:
+    driver: bridge

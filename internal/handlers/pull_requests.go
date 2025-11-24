@@ -59,7 +59,7 @@ func (h *Handler) ReassignPullRequest(c *gin.Context) {
 		return
 	}
 
-	pr, replacedByID, err := h.services.PullRequestService.ReassignReviewer(c.Request.Context(), req.ID, req.OldUserID)
+	pr, replacedByID, err := h.services.PullRequestService.ReassignReviewer(c.Request.Context(), req.ID, req.OldReviewerID)
 	if err != nil {
 		switch err {
 		case domain.ErrPRNotFound, domain.ErrUserNotFound:

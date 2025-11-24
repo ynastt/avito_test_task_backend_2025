@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS pull_requests (
     pull_request_name TEXT NOT NULL,
     author_id TEXT REFERENCES users(user_id) ON DELETE RESTRICT,
     status VARCHAR(6) DEFAULT 'OPEN',
-    assigned_reviewers TEXT[] NOT NULL,
+    assigned_reviewers TEXT[],
     created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
     merged_at TIMESTAMPTZ
 );

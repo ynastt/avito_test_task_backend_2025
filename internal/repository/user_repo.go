@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/lib/pq"
 	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
 	"github.com/ynastt/avito_test_task_backend_2025/pkg/database"
 )
@@ -108,7 +109,7 @@ func (r *UserRepository) GetActiveUsersByTeam(ctx context.Context, teamName stri
 
 	if len(excludeUserIDs) > 0 {
 		query += " AND NOT (user_id = ANY($2))"
-		args = append(args, excludeUserIDs)
+		args = append(args, pq.Array(excludeUserIDs))
 	}
 
 	conn := r.db.Conn(ctx)
