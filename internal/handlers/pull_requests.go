@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/internal/domain"
 )
 
 func (h *Handler) CreatePullRequest(c *gin.Context) {

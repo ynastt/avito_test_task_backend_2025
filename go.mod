@@ -1,4 +1,4 @@
-module github.com/ynastt/avito_test_task_backend_2025
+module ynastt/avito_test_task_backend_2025
 
 go 1.24.0
 

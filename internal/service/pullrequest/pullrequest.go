@@ -7,10 +7,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/repository"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/service/reviewers"
-	"github.com/ynastt/avito_test_task_backend_2025/pkg/database"
+	"ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/internal/repository"
+	"ynastt/avito_test_task_backend_2025/internal/service/reviewers"
+	"ynastt/avito_test_task_backend_2025/pkg/database"
 )
 
 type PullRequestRepository interface {

@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	"ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/pkg/database"
+
 	"github.com/lib/pq"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
-	"github.com/ynastt/avito_test_task_backend_2025/pkg/database"
 )
 
 type PullRequestRepository struct {

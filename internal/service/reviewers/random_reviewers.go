@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/internal/domain"
 )
 
 func ChooseRandomReviewer(candidates []domain.User) (domain.User, error) {

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 
-	// "github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
 )
 

@@ -15,14 +15,14 @@ import (
 	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/handlers"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/repository"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/service"
-	pr "github.com/ynastt/avito_test_task_backend_2025/internal/service/pullrequest"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/service/team"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/service/user"
-	"github.com/ynastt/avito_test_task_backend_2025/pkg/database"
-	"github.com/ynastt/avito_test_task_backend_2025/server"
+	"ynastt/avito_test_task_backend_2025/internal/handlers"
+	"ynastt/avito_test_task_backend_2025/internal/repository"
+	"ynastt/avito_test_task_backend_2025/internal/service"
+	pr "ynastt/avito_test_task_backend_2025/internal/service/pullrequest"
+	"ynastt/avito_test_task_backend_2025/internal/service/team"
+	"ynastt/avito_test_task_backend_2025/internal/service/user"
+	"ynastt/avito_test_task_backend_2025/pkg/database"
+	"ynastt/avito_test_task_backend_2025/server"
 )
 
 func main() {

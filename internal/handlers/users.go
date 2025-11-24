@@ -3,8 +3,9 @@ package handlers
 import (
 	"net/http"
 
+	"ynastt/avito_test_task_backend_2025/internal/domain"
+
 	"github.com/gin-gonic/gin"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
 )
 
 func (h *Handler) SetIsActive(c *gin.Context) {

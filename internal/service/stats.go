@@ -4,8 +4,8 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/repository"
+	"ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/internal/repository"
 )
 
 type StatsService struct {

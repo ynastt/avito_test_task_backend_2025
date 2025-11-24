@@ -6,8 +6,8 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-	"github.com/ynastt/avito_test_task_backend_2025/internal/domain"
-	"github.com/ynastt/avito_test_task_backend_2025/internal/service"
+	"ynastt/avito_test_task_backend_2025/internal/domain"
+	"ynastt/avito_test_task_backend_2025/internal/service"
 )
 
 type Handler struct {
