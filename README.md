@@ -52,6 +52,7 @@ avito_test_task_backend_2025/
 - graceful-shutdown
 - Логирование Slog
 - Добавлен эндпоинт статистики `/stats` (для получения подробной статистики указать details `/stats?details=true`)
+- Добавлен метод массовой деактивации пользователей команды и безопасной переназначаемость открытых PR
 - Описана конфигурация линетра (см `.golangci.yml`)
 
 ## Вопросы/проблемы и пояснения решений
@@ -80,3 +81,195 @@ avito_test_task_backend_2025/
 4. Если запрос вернет код 500? 
 
 В `openapi.yaml` такие коды ответов не рассматривались. Было решено добавить обработку такого кода ошибки в запросах в `handlers`. 
+
+5. Эндпоинт статистики. Какие данные передавать в ответ на запрос? 
+
+При вызове простого GET-запроса `/stats` в ответе будет стандартная статистика: общее количество команд, общее количество пользователей, общее количество пулл-реквестов, количество открытых пулл-реквестов, количество merged пулл-реквестов, количество активных пользователей, количество неактивных пользователей
+
+При вызове GET-запроса с параметром `/stats?details=true` в ответе будет стандартная статистика, дополненная статистикой по количеству назначений по пользователям и/или по PR.  
+В `"user_assignments"` перечислены пользователи, у каждого из которых видно количество назначенных на ревью пулл-реквестов `"pr_count"`.  
+В `"pr_assignments"` перечислены пулл-реквесты, у каждого из которых в поле `"reviewers_count": 1` отображается число ревьюеров.
+
+**API**
+GET `/stats` 
+
+Примеры ответа:
+`200` 
+```json
+{
+    "stats": {
+        "total_teams": 2,
+        "total_users": 5,
+        "total_pull_requests": 3,
+        "open_pull_requests": 2,
+        "merged_pull_requests": 1,
+        "active_users": 5,
+        "inactive_users": 0
+    }
+}
+```
+
+`500` 
+```json
+{
+    "code":"INTERNAL_ERROR", 
+    "message": "internal server error"
+}
+```
+----
+GET `/stats?details=true`
+
+**`200`**
+```json
+{
+    "stats": {
+        "total_teams": 2,
+        "total_users": 5,
+        "total_pull_requests": 3,
+        "open_pull_requests": 2,
+        "merged_pull_requests": 1,
+        "active_users": 5,
+        "inactive_users": 0,
+        "user_assignments": [
+            {
+                "user_id": "u1",
+                "username": "Alice",
+                "team_name": "backend",
+                "pr_count": 1,
+                "is_active": true
+            },
+            {
+                "user_id": "u2",
+                "username": "Bob",
+                "team_name": "backend",
+                "pr_count": 1,
+                "is_active": true
+            },
+            {
+                "user_id": "u5",
+                "username": "Anna",
+                "team_name": "frontend",
+                "pr_count": 1,
+                "is_active": true
+            },
+            {
+                "user_id": "u6",
+                "username": "Nina",
+                "team_name": "frontend",
+                "pr_count": 1,
+                "is_active": true
+            },
+            {
+                "user_id": "u4",
+                "username": "Melisa",
+                "team_name": "frontend",
+                "pr_count": 0,
+                "is_active": true
+            }
+        ],
+        "pr_assignments": [
+            {
+                "pull_request_id": "pr-1003",
+                "pull_request_name": "Add ui",
+                "author_id": "u4",
+                "status": "OPEN",
+                "reviewers_count": 2
+            },
+            {
+                "pull_request_id": "pr-1002",
+                "pull_request_name": "Add migration",
+                "author_id": "u2",
+                "status": "MERGED",
+                "reviewers_count": 1
+            },
+            {
+                "pull_request_id": "pr-1001",
+                "pull_request_name": "Add search",
+                "author_id": "u1",
+                "status": "OPEN",
+                "reviewers_count": 1
+            }
+        ]
+    }
+}
+```
+
+**`500`** 
+```json
+{
+    "code":"INTERNAL_ERROR", 
+    "message": "internal server error"
+}
+```
+
+
+
+6. Метод массовой деактивации пользователей команды и безопасной переназначаемость открытых PR. Какая логика?
+
+**Основная идея:** перед деактивацией пользователя необходимо переназначить ревьюера на PR, на которые был назначен этот пользователь. Поскольку пользователь с `isActive = false` не должен назначаться на ревью.
+
+**Описание реализации**  
+Метод получает список идентификаторов пользователей, которые нужно деактивировать.
+Для каждого такого пользователя получаем список открытых PR, где пользователь назначен ревьюером. Для каждого из этих PR выполняем переназначение ревьюера. Для переназначения ревьюера выполняется поиск подходящих кандидатов для замены пользователя на ревью.
+
+Портрет подходящего кандидата на замену ревьюера PR:
+- активный (`isActive = true`)
+- входит в команду рассматриваемого пользователя
+- еще не назначен на этот PR
+- не является автором этого PR
+
+Если кандидаты для замены ревьюера найдены:
+* из них выбирается один случайный пользователь B
+* пользователь А удаляется из списка назначеных ревьюеров PR
+* происходит деактивация пользователя А (`isActive = false`)
+* пользователь В назначется ревьюером на PR
+
+Если подходящих кандидатов для замены ревьюера нет:
+* пользователь А удаляется из списка назначеных ревьюеров PR
+
+Для метода массовой деактивации добавлен отдельный эндпоинт:
+
+**API**
+POST `/users/deactivate` 
+Тело запроса:
+```json
+{
+    "user_ids": ["u5", "u6"]
+}
+```
+
+Примеры ответа:
+`200` 
+```json
+{
+    "deactivated_user_ids": ["u5", "u6"],
+    "pull_requests_info": [
+        {
+            "pr_id": "pr-1003",
+            "old_reviewer_id": "u5",
+            "reassign_status": "REMOVED_NO_REPLACEMENT"
+        },
+        {
+            "pr_id": "pr-1003",
+            "old_reviewer_id": "u6",
+            "reassign_status": "REMOVED_NO_REPLACEMENT"
+        }
+    ]
+}
+```
+
+`400` 
+```json
+{
+    "code":"EMPTY USER IDs", 
+    "message": "user_ids cannot be empty"
+}
+```
+
+`500` 
+```json
+{
+    "code":"INTERNAL_ERROR", 
+    "message": "internal server error"
+}
+```

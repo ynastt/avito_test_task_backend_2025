@@ -18,7 +18,7 @@ func (h *Handler) GetStatistics(c *gin.Context) {
 
 	stats, err := h.services.StatsService.GetStats(c.Request.Context(), includeDetails)
 	if err != nil {
-		h.errorResponse(c, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to get statistics")
+		h.errorResponse(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
 		return
 	}
 

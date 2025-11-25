@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"ynastt/avito_test_task_backend_2025/internal/domain"
 	"ynastt/avito_test_task_backend_2025/internal/repository"
@@ -47,7 +48,8 @@ func NewUserService(userRepo UserRepository,
 
 func (s *UserService) SetIsActive(ctx context.Context, userID string, isActive bool) (*domain.User, error) {
 	if !isActive {
-		return s.deactivateUser(ctx, userID)
+		user, _, err := s.deactivateUser(ctx, userID)
+		return user, err
 	}
 
 	user, err := s.userRepo.SetIsActive(ctx, userID, isActive)
@@ -62,8 +64,89 @@ func (s *UserService) SetIsActive(ctx context.Context, userID string, isActive b
 	return user, nil
 }
 
-func (s *UserService) deactivateUser(ctx context.Context, userID string) (*domain.User, error) {
+// метод массовой деактивации
+func (s *UserService) BulkDeactivateUsers(ctx context.Context, userIDs []string) (*domain.BulkDeactivateResponse, error) {
+	if len(userIDs) == 0 {
+		return &domain.BulkDeactivateResponse{
+			DeactivatedUserIDs: []string{},
+			PRsInfo:            []domain.PRsInfo{},
+		}, domain.ErrEmptyUserIDs
+	}
+
+	var (
+		deactivatedUserIDs []string
+		reassignedPRs      []domain.PRsInfo
+		errors             []string
+	)
+
+	type userResult struct {
+		userID string
+		user   *domain.User
+		prs    []domain.PRsInfo
+		err    error
+	}
+
+	// обрабатываем пользователей в горутинах
+	results := make(chan userResult, len(userIDs))
+	var wg sync.WaitGroup
+
+	for _, userID := range userIDs {
+		wg.Add(1)
+		go func(uid string) {
+			defer wg.Done()
+
+			user, prs, err := s.deactivateUser(ctx, uid)
+			results <- userResult{
+				userID: uid,
+				user:   user,
+				prs:    prs,
+				err:    err,
+			}
+		}(userID)
+	}
+
+	// закрываем канал после завершения всех горутин
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	// Собираем результаты
+	for result := range results {
+		if result.err != nil {
+			errors = append(errors, fmt.Sprintf("user %s: %v", result.userID, result.err))
+			continue
+		}
+
+		if result.user != nil {
+			deactivatedUserIDs = append(deactivatedUserIDs, result.user.UserID)
+		}
+
+		if len(result.prs) > 0 {
+			reassignedPRs = append(reassignedPRs, result.prs...)
+		}
+	}
+
+	// формируем ответ
+	response := &domain.BulkDeactivateResponse{
+		DeactivatedUserIDs: deactivatedUserIDs,
+		PRsInfo:            reassignedPRs,
+	}
+
+	if len(errors) > 0 {
+		response.Errors = errors
+	}
+
+	s.lg.Info("bulk deactivation completed",
+		slog.Int("count deactivated users", len(deactivatedUserIDs)),
+		slog.Int("errors", len(errors)))
+
+	return response, nil
+}
+
+func (s *UserService) deactivateUser(ctx context.Context, userID string) (*domain.User, []domain.PRsInfo, error) {
 	var user *domain.User
+	var prs []domain.PRsInfo
 
 	err := s.txManager.Do(ctx, func(txCtx context.Context) error {
 		oldUser, err := s.userRepo.GetByID(txCtx, userID)
@@ -85,9 +168,19 @@ func (s *UserService) deactivateUser(ctx context.Context, userID string) (*domai
 		}
 
 		for _, prShort := range openPRs {
-			if err := s.handleReviewerReplacement(txCtx, prShort.ID, userID, oldUser.TeamName); err != nil {
+			newReviewerID, reassignStatus, err := s.replacePRReviewer(txCtx, prShort.ID, userID, oldUser.TeamName)
+			if err != nil {
 				return fmt.Errorf("failed to handle PR %s replacement: %w", prShort.ID, err)
 			}
+
+			prInfo := domain.PRsInfo{
+				PRID:           prShort.ID,
+				OldReviewerID:  userID,
+				NewReviewerID:  newReviewerID,
+				ReassignStatus: reassignStatus,
+			}
+
+			prs = append(prs, prInfo)
 		}
 
 		user, err = s.userRepo.SetIsActive(txCtx, userID, false)
@@ -104,23 +197,23 @@ func (s *UserService) deactivateUser(ctx context.Context, userID string) (*domai
 
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
-			return nil, domain.ErrUserNotFound
+			return nil, prs, domain.ErrUserNotFound
 		}
-		return nil, fmt.Errorf("failed to deactivate user: %w", err)
+		return nil, prs, fmt.Errorf("failed to deactivate user: %w", err)
 	}
 
-	return user, nil
+	return user, prs, nil
 }
 
-func (s *UserService) handleReviewerReplacement(
+func (s *UserService) replacePRReviewer(
 	ctx context.Context,
 	prID string,
 	OldReviewerID string,
 	teamName string,
-) error {
+) (string, string, error) {
 	pr, err := s.prRepo.GetPullRequestByID(ctx, prID)
 	if err != nil {
-		return fmt.Errorf("failed to get PR %s: %w", prID, err)
+		return "", "", fmt.Errorf("failed to get PR %s: %w", prID, err)
 	}
 
 	excludeIDs := []string{pr.AuthorID}
@@ -132,37 +225,37 @@ func (s *UserService) handleReviewerReplacement(
 			slog.String("pr_id", prID),
 			slog.String("user_id", OldReviewerID),
 			slog.Any("error", err))
-		return s.removeReviewer(ctx, OldReviewerID, prID)
+		return "", string(domain.ReviewerRemoved), s.removeReviewer(ctx, OldReviewerID, prID)
 	}
 
-	if len(candidates) > 0 {
-		newReviewer, err := reviewers.ChooseRandomReviewer(candidates)
-		if err != nil {
-			s.lg.Warn("failed to select reviewer, removing",
-				slog.String("pr_id", prID),
-				slog.String("user_id", OldReviewerID))
-			return s.removeReviewer(ctx, OldReviewerID, prID)
-		}
-
-		if err := s.prRepo.RemoveReviewer(ctx, OldReviewerID, prID); err != nil {
-			return fmt.Errorf("failed to remove old reviewer: %w", err)
-		}
-
-		if err := s.prRepo.AssignReviewer(ctx, newReviewer.UserID, prID); err != nil {
-			return fmt.Errorf("failed to assign new reviewer: %w", err)
-		}
-
-		s.lg.Info("reviewer reassigned during deactivation",
+	if len(candidates) == 0 {
+		s.lg.Info("no replacement candidates found, removing reviewer",
 			slog.String("pr_id", prID),
-			slog.String("old_user_id", OldReviewerID),
-			slog.String("new_user_id", newReviewer.UserID))
-		return nil
+			slog.String("user_id", OldReviewerID))
+		return "", string(domain.ReviewerRemoved), s.removeReviewer(ctx, OldReviewerID, prID)
 	}
 
-	s.lg.Info("no replacement candidates found, removing reviewer",
+	newReviewer, err := reviewers.ChooseRandomReviewer(candidates)
+	if err != nil {
+		s.lg.Warn("failed to select reviewer, removing",
+			slog.String("pr_id", prID),
+			slog.String("user_id", OldReviewerID))
+		return "", string(domain.ReviewerRemoved), s.removeReviewer(ctx, OldReviewerID, prID)
+	}
+
+	if err := s.removeReviewer(ctx, OldReviewerID, prID); err != nil {
+		return "", "", err
+	}
+
+	if err := s.assignReviewer(ctx, newReviewer.UserID, prID); err != nil {
+		return "", "", err
+	}
+
+	s.lg.Info("reviewer reassigned during deactivation",
 		slog.String("pr_id", prID),
-		slog.String("user_id", OldReviewerID))
-	return s.removeReviewer(ctx, OldReviewerID, prID)
+		slog.String("old_user_id", OldReviewerID),
+		slog.String("new_user_id", newReviewer.UserID))
+	return newReviewer.UserID, string(domain.ReviewerReplaced), nil
 }
 
 func (s *UserService) removeReviewer(ctx context.Context, userID, prID string) error {
@@ -171,6 +264,18 @@ func (s *UserService) removeReviewer(ctx context.Context, userID, prID string) e
 	}
 
 	s.lg.Info("removed not active reviewer from PR",
+		slog.String("pr_id", prID),
+		slog.String("user_id", userID))
+
+	return nil
+}
+
+func (s *UserService) assignReviewer(ctx context.Context, userID, prID string) error {
+	if err := s.prRepo.AssignReviewer(ctx, userID, prID); err != nil {
+		return fmt.Errorf("failed to assign reviewer: %w", err)
+	}
+
+	s.lg.Info("assigned reviewer for PR",
 		slog.String("pr_id", prID),
 		slog.String("user_id", userID))
 

@@ -13,6 +13,7 @@ var (
 	ErrTeamNotFound = errors.New("team not found")
 	ErrUserNotFound = errors.New("user not found")
 	ErrPRNotFound   = errors.New("PR not found")
+	ErrEmptyUserIDs = errors.New("user_ids cannot be empty")
 )
 
 type ErrorResponse struct {

@@ -42,6 +42,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	{
 		users.POST("/setIsActive", h.SetIsActive)
 		users.GET("/getReview", h.GetReview)
+		users.POST("/deactivate", h.BulkDeactivateUsers) // endpoint для массовой деактивации
 	}
 
 	pullRequest := router.Group("/pullRequest")

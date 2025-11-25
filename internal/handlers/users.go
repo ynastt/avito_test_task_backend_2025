@@ -49,3 +49,24 @@ func (h *Handler) GetReview(c *gin.Context) {
 
 	h.successResponse(c, http.StatusOK, response)
 }
+
+func (h *Handler) BulkDeactivateUsers(c *gin.Context) {
+	var req domain.BulkDeactivateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.errorResponse(c, http.StatusBadRequest, "INVALID_INPUT", "invalid request body")
+		return
+	}
+
+	response, err := h.services.UserService.BulkDeactivateUsers(c.Request.Context(), req.UserIDs)
+	if err != nil {
+		switch err {
+		case domain.ErrEmptyUserIDs:
+			h.errorResponse(c, http.StatusBadRequest, "EMPTY USER IDs", err.Error())
+		default:
+			h.errorResponse(c, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")
+		}
+		return
+	}
+
+	h.successResponse(c, http.StatusOK, response)
+}
